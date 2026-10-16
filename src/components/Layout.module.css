@@ -84,6 +84,13 @@
   color: var(--texto-suave);
 }
 
+.pieAcciones {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
 @media (max-width: 480px) {
   .terminal {
     display: none;

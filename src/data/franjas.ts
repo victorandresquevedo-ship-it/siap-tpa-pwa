@@ -87,21 +87,34 @@ function diasDesdeBase(diaBase: string, fecha: string): number {
   return Math.round((desdeFechaISO(fecha).getTime() - desdeFechaISO(diaBase).getTime()) / 86_400_000);
 }
 
+/** Camiones simulados (sin detalle) de una franja, además de las citas de la demo. */
+export function demandaSimulada(diaBase: string, fecha: string, hora: number): number {
+  const dia = diasDesdeBase(diaBase, fecha);
+  return DEMANDA_SIMULADA[Math.min(Math.max(dia, 0), DEMANDA_SIMULADA.length - 1)][hora] ?? 0;
+}
+
+/** Camiones ya agendados en una franja (simulados + citas), sin contar la cita indicada. */
+export function ocupacionFranja(
+  estado: Pick<DemoState, 'diaBase' | 'citas'>,
+  fecha: string,
+  hora: number,
+  sinCitaId?: string,
+): number {
+  const citas = estado.citas.filter((c) => c.fecha === fecha && c.franja === hora && c.id !== sinCitaId).length;
+  return demandaSimulada(estado.diaBase, fecha, hora) + citas;
+}
+
 export function franjasDelDia(
   estado: Pick<DemoState, 'diaBase' | 'citas'>,
   fecha: string,
   { ahora, cierre, reprogramando }: OpcionesFranjas,
 ): InfoFranja[] {
   const dia = diasDesdeBase(estado.diaBase, fecha);
-  const demanda = DEMANDA_SIMULADA[Math.min(Math.max(dia, 0), DEMANDA_SIMULADA.length - 1)];
   const inicioDia = desdeFechaISO(fecha);
 
   const franjas: InfoFranja[] = [];
   for (let hora = PRIMERA_FRANJA; hora <= ULTIMA_FRANJA; hora++) {
-    const citas = estado.citas.filter(
-      (c) => c.fecha === fecha && c.franja === hora && c.id !== reprogramando?.id,
-    ).length;
-    const ocupados = demanda[hora] + citas;
+    const ocupados = ocupacionFranja(estado, fecha, hora, reprogramando?.id);
     const libres = Math.max(0, CAPACIDAD_FRANJA - ocupados);
     const inicio = enDia(inicioDia, 0, hora);
     const fin = enDia(inicioDia, 0, hora + 1);

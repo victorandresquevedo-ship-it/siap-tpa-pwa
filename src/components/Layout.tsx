@@ -1,4 +1,5 @@
 import { Link, Outlet, useLocation } from 'react-router-dom';
+import { BannerConexion } from './BannerConexion';
 import { BotonReiniciar } from './BotonReiniciar';
 import s from './Layout.module.css';
 
@@ -6,6 +7,8 @@ const SECCIONES: [prefijo: string, nombre: string][] = [
   ['/conductor', 'Conductor'],
   ['/planificador', 'Planificador de patio'],
   ['/indicadores', 'Indicadores del turno'],
+  ['/demo', 'Panel de la demo'],
+  ['/guia-ejemplo', 'Guías de ejemplo'],
 ];
 
 export function Layout() {
@@ -26,13 +29,19 @@ export function Layout() {
       <p className={s.aviso} role="note">
         Prototipo de demostración, datos simulados
       </p>
+      <BannerConexion />
       <main className={s.principal} id="contenido">
         <Outlet />
       </main>
       <footer className={s.pie}>
         <div className={s.pieInterior}>
           <span>Prototipo académico · Innovación y Emprendimiento III · INACAP Arica</span>
-          <BotonReiniciar />
+          <span className={s.pieAcciones}>
+            <Link to="/demo" className="btn btn--secundario">
+              Panel de la demo
+            </Link>
+            <BotonReiniciar />
+          </span>
         </div>
       </footer>
     </div>

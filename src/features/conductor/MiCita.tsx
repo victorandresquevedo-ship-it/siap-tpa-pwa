@@ -1,127 +1,333 @@
-// Confirmación y resumen de la cita: franja en grande, QR de ingreso para garita,
-// SMS simulado y "Reprogramar" en un toque. Todo se ve sin señal (datos guardados en el teléfono).
+// Seguimiento del conductor (Modo C): tiempo estimado con su motivo, lugar en la fila, posición,
+// estado y franja; avisos destacados, QR de ingreso, reprogramar y encuesta al ser atendido.
+// Todo se ve sin señal (datos guardados en el teléfono). "Modo cabina" deja solo lo esencial.
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, Navigate, useLocation } from 'react-router-dom';
 import { CodigoQr } from '../../components/CodigoQr';
+import { QrDosEquipos } from '../../components/QrDosEquipos';
 import { Semaforo } from '../../components/Semaforo';
-import { textoDiaCompleto, textoFranja } from '../../data/fechas';
+import { textoDia, textoDiaCompleto, textoFranja, textoHoraDe } from '../../data/fechas';
 import { textoQrIngreso } from '../../data/qr';
 import { nombrePuerto } from '../../data/seed';
-import type { DemoState, EstadoCita } from '../../data/types';
-import { useEnLinea } from '../../pwa/conexion';
+import {
+  ORDEN_ESTADOS,
+  TEXTO_ESTADO,
+  lugarEnFila,
+  textoMotivoTiempo,
+  tiempoVigente,
+} from '../../data/seguimiento';
+import { store } from '../../data/store';
+import type { Cita, DemoState } from '../../data/types';
 import { PieConductor, citaActual, datosCita } from './comun';
 import s from './Conductor.module.css';
 
-export const TEXTO_ESTADO: Record<EstadoCita, string> = {
-  reservada: 'Reservada',
-  en_ruta: 'En ruta',
-  antepuerto: 'En antepuerto',
-  garita: 'En garita',
-  atendido: 'Atendido',
+const CLAVE_CABINA = 'siap-tpa:modo-cabina';
+
+function leerCabina(): boolean {
+  try {
+    return localStorage.getItem(CLAVE_CABINA) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function useModoCabina(): [boolean, () => void] {
+  const [activo, setActivo] = useState(leerCabina);
+  const alternar = () =>
+    setActivo((v) => {
+      try {
+        localStorage.setItem(CLAVE_CABINA, v ? '0' : '1');
+      } catch {
+        // Sin almacenamiento: el modo dura mientras la pantalla esté abierta.
+      }
+      return !v;
+    });
+  return [activo, alternar];
+}
+
+const CARAS: { nota: 1 | 2 | 3 | 4 | 5; cara: string; texto: string }[] = [
+  { nota: 1, cara: '😠', texto: 'Muy mal' },
+  { nota: 2, cara: '🙁', texto: 'Mal' },
+  { nota: 3, cara: '😐', texto: 'Regular' },
+  { nota: 4, cara: '🙂', texto: 'Bien' },
+  { nota: 5, cara: '😄', texto: 'Muy bien' },
+];
+
+const AVISOS_NAVEGACION = {
+  reservada: '¡Listo! Tu cita quedó reservada.',
+  reprogramada: 'Tu cita quedó reprogramada.',
+  importada: 'Cita cargada desde el otro equipo.',
 };
+
+function AvisosDestacados({ cita }: { cita: Cita }) {
+  const pendientes = cita.avisos.filter((a) => !a.visto);
+  if (pendientes.length === 0) return null;
+  return (
+    <section className={s.avisoDestacado} role="alert" aria-label="Avisos">
+      {pendientes.map((a) => (
+        <div key={a.id}>
+          <strong>{a.titulo}</strong>
+          <p>{a.detalle}</p>
+        </div>
+      ))}
+      <button type="button" className="btn btn--primario btn--grande" onClick={() => store.marcarAvisosVistos(cita.id)}>
+        Entendido
+      </button>
+    </section>
+  );
+}
+
+function LineaEstado({ cita }: { cita: Cita }) {
+  const actual = ORDEN_ESTADOS.indexOf(cita.estado);
+  return (
+    <ol className={s.estados} aria-label={`Estado de tu cita: ${TEXTO_ESTADO[cita.estado]}`}>
+      {ORDEN_ESTADOS.map((e, i) => (
+        <li
+          key={e}
+          className={`${s.estadoPaso} ${i < actual ? s.estadoHecho : ''} ${i === actual ? s.estadoActual : ''}`}
+          aria-current={i === actual ? 'step' : undefined}
+        >
+          {i < actual ? '✓ ' : ''}
+          {TEXTO_ESTADO[e]}
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+function Atendido({ cita }: { cita: Cita }) {
+  const atencion = cita.atencion!;
+  return (
+    <section className={`tarjeta pila ${s.atendido}`} aria-labelledby="titulo-atendido">
+      <h1 id="titulo-atendido" style={{ margin: 0 }}>
+        ¡Atendido!
+      </h1>
+      <p className={s.diaGrande}>
+        Atendido en {atencion.minutos} min,{' '}
+        {atencion.dentroDeFranja ? 'dentro de tu franja' : 'fuera de tu franja'}.
+      </p>
+      <div>
+        <Semaforo nivel={atencion.dentroDeFranja ? 'verde' : 'amarillo'}>
+          {atencion.dentroDeFranja ? 'Dentro de tu franja' : 'Fuera de tu franja'}
+        </Semaforo>
+      </div>
+      {atencion.encuesta ? (
+        <p role="status" className="aviso-ok">
+          ¡Gracias! Tu respuesta ayuda a mejorar la atención.
+        </p>
+      ) : (
+        <div className="pila" style={{ gap: 8 }}>
+          <h2 style={{ margin: 0, fontSize: '1.15rem' }}>¿Cómo te atendimos?</h2>
+          <div className={s.caras} role="group" aria-label="Encuesta de satisfacción">
+            {CARAS.map((c) => (
+              <button
+                key={c.nota}
+                type="button"
+                className={s.cara}
+                aria-label={c.texto}
+                onClick={() => store.responderEncuesta(cita.id, c.nota)}
+              >
+                <span aria-hidden="true">{c.cara}</span>
+                <span aria-hidden="true">{c.texto}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      <Link to="/conductor/reservar" className="btn btn--secundario btn--grande btn--bloque">
+        Nueva reserva
+      </Link>
+    </section>
+  );
+}
 
 export function MiCita({ demo }: { demo: DemoState }) {
   const { state } = useLocation();
-  const aviso = (state as { aviso?: 'reservada' | 'reprogramada' } | null)?.aviso;
-  const enLinea = useEnLinea();
+  const aviso = (state as { aviso?: keyof typeof AVISOS_NAVEGACION } | null)?.aviso;
+  const [cabina, alternarCabina] = useModoCabina();
   const [verQr, setVerQr] = useState(false);
+  // El mensaje de "reservada / reprogramada" se oculta solo, para no quedar desactualizado.
+  const [verMensaje, setVerMensaje] = useState(true);
+  useEffect(() => {
+    const t = window.setTimeout(() => setVerMensaje(false), 6000);
+    return () => window.clearTimeout(t);
+  }, []);
 
   const actual = citaActual(demo);
   if (!actual) return <Navigate to="/conductor/reservar" replace />;
   const { cita, contenedor, nave, conductor } = datosCita(demo, actual);
-  const cuando = `${textoDiaCompleto(cita.fecha)}, ${textoFranja(cita.franja)}`;
+  const tiempo = tiempoVigente(cita);
+  const fila = lugarEnFila(demo, cita);
+  const terminada = cita.estado === 'atendido';
+  const puedeReprogramar = cita.estado === 'reservada' || cita.estado === 'en_ruta';
   const sms =
     `SIAP-TPA: Cita ${cita.id} ${cita.reprogramaciones > 0 ? 'reprogramada' : 'confirmada'}. ` +
-    `${cuando}. Contenedor ${contenedor.id}, patente ${conductor.patente}. ` +
+    `${textoDiaCompleto(cita.fecha)}, ${textoFranja(cita.franja)}. Contenedor ${contenedor.id}, patente ${conductor.patente}. ` +
     'Muestra tu QR en garita. Para cambiar la hora abre la app y toca Reprogramar.';
 
   return (
-    <div className={s.pantalla}>
-      {aviso && (
+    <div className={`${s.pantalla} ${cabina ? s.cabina : ''}`}>
+      {aviso && verMensaje && !cabina && (
         <p role="status" className="aviso-ok">
-          {aviso === 'reservada' ? '¡Listo! Tu cita quedó reservada.' : 'Tu cita quedó reprogramada.'}
-        </p>
-      )}
-      {!enLinea && (
-        <p role="status" className="aviso-info">
-          Sin señal: tu cita está guardada en este teléfono y se ve igual sin internet.
+          {AVISOS_NAVEGACION[aviso]}
         </p>
       )}
 
-      <section className="tarjeta pila" aria-labelledby="titulo-cita">
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center' }}>
-          <h1 id="titulo-cita" style={{ margin: 0 }}>
-            Tu cita
-          </h1>
-          <Semaforo nivel="neutro">{TEXTO_ESTADO[cita.estado]}</Semaforo>
-        </div>
-        <div>
-          <p className={s.diaGrande}>{textoDiaCompleto(cita.fecha)}</p>
-          <p className={s.horaGrande}>{textoFranja(cita.franja)}</p>
-        </div>
-        <dl className={s.resumen}>
-          <dt>N° de cita</dt>
-          <dd>{cita.id}</dd>
-          <dt>Contenedor</dt>
-          <dd className="mono">{contenedor.id}</dd>
-          <dt>Nave</dt>
-          <dd>
-            {nave.nombre} → {nombrePuerto(contenedor.puerto)}
-          </dd>
-          <dt>Patente</dt>
-          <dd>{conductor.patente}</dd>
-          <dt>Posición</dt>
-          <dd>
-            {cita.posicion ? (
-              <span className="mono">{cita.posicion.codigo}</span>
-            ) : (
-              'Por confirmar: el planificador la está revisando'
-            )}
-          </dd>
-        </dl>
-
-        <button
-          type="button"
-          className="btn btn--primario btn--grande btn--bloque"
-          aria-expanded={verQr}
-          aria-controls="qr-ingreso"
-          onClick={() => setVerQr((v) => !v)}
-        >
-          {verQr ? 'Ocultar QR de ingreso' : 'Mostrar QR de ingreso'}
+      <div className={s.barraSeguimiento}>
+        <Semaforo nivel="neutro">
+          Cita {cita.id} · {TEXTO_ESTADO[cita.estado]}
+        </Semaforo>
+        <button type="button" className="btn btn--secundario" aria-pressed={cabina} onClick={alternarCabina}>
+          {cabina ? 'Salir de modo cabina' : 'Modo cabina'}
         </button>
-        {verQr && (
-          <div id="qr-ingreso" className={s.qrGrande}>
-            <CodigoQr
-              texto={textoQrIngreso(cita, contenedor, conductor)}
-              etiqueta={`Código QR de ingreso a garita para la cita ${cita.id}`}
-              tamano={280}
-            />
-            <p className={s.leyenda}>Muestra este código en garita. Funciona sin internet.</p>
-          </div>
-        )}
+      </div>
 
-        <Link to="/conductor/reprogramar" className="btn btn--secundario btn--grande btn--bloque">
-          Reprogramar
-        </Link>
-        <p className={s.leyenda}>¿Te atrasaste en la frontera o en la ruta? Cambia tu hora en un toque.</p>
-      </section>
+      <AvisosDestacados cita={cita} />
 
-      <section className="tarjeta pila" aria-labelledby="titulo-sms">
-        <h2 id="titulo-sms" style={{ margin: 0 }}>
-          Confirmación por SMS <span className="texto-suave">(simulado)</span>
-        </h2>
-        <div className={s.sms}>
-          <div className={s.smsCabecera}>
-            <span>SMS · SIAP-TPA</span>
-            <span>a {conductor.telefono}</span>
-          </div>
-          {sms}
+      {terminada ? (
+        <Atendido cita={cita} />
+      ) : (
+        tiempo && (
+          <section className={`tarjeta ${s.tiempo}`} aria-labelledby="titulo-tiempo">
+            <h1 id="titulo-tiempo" className={s.etiqueta}>
+              Tiempo estimado de atención
+            </h1>
+            <p className={s.cifra} aria-live="polite">
+              {tiempo.minutos}
+              <small>min</small>
+            </p>
+            <p className={`${s.motivo} ${tiempo.delta !== 0 ? s.motivoCambio : ''}`}>{textoMotivoTiempo(tiempo)}</p>
+            {!cabina && cita.tiempoEstimado.length > 1 && (
+              <details className={s.historial}>
+                <summary>Ver todos los cambios ({cita.tiempoEstimado.length})</summary>
+                <ol>
+                  {[...cita.tiempoEstimado].reverse().map((c) => (
+                    <li key={c.en + c.minutos}>
+                      <strong>
+                        {textoHoraDe(new Date(c.en))} · {c.minutos} min
+                      </strong>{' '}
+                      — {textoMotivoTiempo(c)}
+                    </li>
+                  ))}
+                </ol>
+              </details>
+            )}
+          </section>
+        )
+      )}
+
+      <dl className={s.claves}>
+        <div className={s.clave}>
+          <dt>Lugar en la fila</dt>
+          {cita.estado === 'garita' || terminada ? (
+            <dd>{cita.estado === 'garita' ? 'En garita' : '—'}</dd>
+          ) : (
+            <>
+              <dd>{fila.lugar}.º</dd>
+              <span>de {fila.total} en tu franja</span>
+            </>
+          )}
         </div>
-        <p className={s.leyenda}>Llega aunque no tengas plan de datos chileno.</p>
-      </section>
+        <div className={s.clave}>
+          <dt>Posición</dt>
+          {cita.posicion ? (
+            <dd className={s.claveMono}>{cita.posicion.codigo}</dd>
+          ) : (
+            <>
+              <dd>Por confirmar</dd>
+              <span>la revisa el planificador</span>
+            </>
+          )}
+        </div>
+        <div className={s.clave}>
+          <dt>Tu franja</dt>
+          <dd>{textoFranja(cita.franja).replace('–', '–​')}</dd>
+          <span>{textoDia(cita.fecha)}</span>
+        </div>
+      </dl>
 
-      <PieConductor demo={demo} />
+      <LineaEstado cita={cita} />
+
+      {!terminada && (
+        <>
+          <button
+            type="button"
+            className="btn btn--primario btn--grande btn--bloque"
+            aria-expanded={verQr}
+            aria-controls="qr-ingreso"
+            onClick={() => setVerQr((v) => !v)}
+          >
+            {verQr ? 'Ocultar QR de ingreso' : 'Mostrar QR de ingreso'}
+          </button>
+          {verQr && (
+            <div id="qr-ingreso" className={s.qrGrande}>
+              <CodigoQr
+                texto={textoQrIngreso(cita, contenedor, conductor)}
+                etiqueta={`Código QR de ingreso a garita para la cita ${cita.id}`}
+                tamano={280}
+              />
+              <p className={s.leyenda}>Muestra este código en garita. Funciona sin internet.</p>
+            </div>
+          )}
+          {puedeReprogramar && (
+            <>
+              <Link to="/conductor/reprogramar" className="btn btn--secundario btn--grande btn--bloque">
+                Reprogramar
+              </Link>
+              {!cabina && (
+                <p className={s.leyenda}>¿Te atrasaste en la frontera o en la ruta? Cambia tu hora en un toque.</p>
+              )}
+            </>
+          )}
+        </>
+      )}
+
+      {!cabina && (
+        <>
+          <section className="tarjeta pila" aria-labelledby="titulo-detalle">
+            <h2 id="titulo-detalle" style={{ margin: 0 }}>
+              Tu cita
+            </h2>
+            <dl className={s.resumen}>
+              <dt>Día y hora</dt>
+              <dd>
+                {textoDiaCompleto(cita.fecha)}, {textoFranja(cita.franja)}
+              </dd>
+              <dt>Contenedor</dt>
+              <dd className="mono">{contenedor.id}</dd>
+              <dt>Nave</dt>
+              <dd>
+                {nave.nombre} → {nombrePuerto(contenedor.puerto)}
+              </dd>
+              <dt>Patente</dt>
+              <dd>{conductor.patente}</dd>
+            </dl>
+          </section>
+
+          <section className="tarjeta pila" aria-labelledby="titulo-sms">
+            <h2 id="titulo-sms" style={{ margin: 0 }}>
+              Confirmación por SMS <span className="texto-suave">(simulado)</span>
+            </h2>
+            <div className={s.sms}>
+              <div className={s.smsCabecera}>
+                <span>SMS · SIAP-TPA</span>
+                <span>a {conductor.telefono}</span>
+              </div>
+              {sms}
+            </div>
+            <p className={s.leyenda}>Llega aunque no tengas plan de datos chileno.</p>
+          </section>
+
+          <QrDosEquipos
+            demo={demo}
+            citaId={cita.id}
+            texto="Para ver esta misma cita en otro equipo: en un celular, escanea el código con la cámara; en el notebook, usa «Leer QR del otro equipo» en el Panel de la demo."
+          />
+
+          <PieConductor demo={demo} />
+        </>
+      )}
     </div>
   );
 }

@@ -18,7 +18,7 @@ La especificación completa (prompt maestro) está en
 |---|---|---|
 | 1 | Base, tema, rutas, datos de ejemplo, motor + pruebas | Hecha |
 | 2 | Modo B: consentimiento, reserva 2 pasos, QR guía, franja recomendada, SMS simulado, reprogramar (+ QR de ingreso, "Borrar mis datos" y selector de conductor de ejemplo, adelantados) | Hecha |
-| 3 | Modo C: modo cabina, tiempo con motivo, aviso de cambio, banner sin señal, encuesta; QR "dos dispositivos" | Pendiente |
+| 3 | Modo C: modo cabina, tiempo con motivo, aviso de cambio, banner sin señal, encuesta; QR "dos dispositivos"; Panel de la demo (`/demo`) | Hecha |
 | 4 | Modo A: consola, mapa por bloques, panel "por qué", alternativas, aceptar/modificar con motivo en 1 toque; Modo D: M1–M8 | Pendiente |
 | 5 | vite-plugin-pwa (precache, manifest, íconos 192/512), cola "pendiente de enviar", accesibilidad, README, Vercel | Pendiente |
 
@@ -61,12 +61,29 @@ p. ej. Chrome de Windows), vite-plugin-pwa 2 (Fase 5), Vitest 5.
   mano); ingreso `SIAPTPA:INGRESO:<cita>:<contenedor>:<patente>:<fecha>:<hora>`. `LectorQr` usa
   BarcodeDetector o jsQR (carga diferida) y ofrece "Tomar foto de la guía" porque la cámara en vivo
   exige https. `CodigoQr` dibuja SVG local con `qrcode`.
+- **Seguimiento** (`src/data/seguimiento.ts`, `MiCita.tsx`): `Cita.tiempoEstimado` es un historial
+  `{minutos, delta, motivo}`; el tiempo **solo cambia con motivo** (reservar, reprogramar, nave adelanta
+  embarque +6 min, cambio de bloque ±1 min cada 60 m). Lugar en la fila = camiones simulados de la
+  franja + citas por `enFilaDesde`. `Cita.avisos` = avisos destacados (posición asignada/cambiada) con
+  "Entendido". Modo cabina: preferencia por equipo en `localStorage` (`siap-tpa:modo-cabina`).
+- **Hitos** (`registrarHito`): solo avanzan; garita/atendido exigen posición asignada. Atendido guarda
+  minutos (por defecto el tiempo vigente) y si fue dentro de la franja; luego encuesta de 5 caras.
+- **Planificador** (`decidirPosicion`, ya disponible para la Fase 4): valida mantención, pila llena y
+  pila de otra nave/destino; recalcula el nivel real; deja el contenedor en el patio una sola vez;
+  `decision` = aceptada si coincide con la sugerida, si no modificada con motivo (`TEXTO_MOTIVO`).
+- **Dos dispositivos** (`src/data/paquete.ts`): `/importar#d=<base64url JSON>` con la cita (historial
+  recortado) y el embarque de su nave. `importarCita(..., {comoConductor})`: en el celular la deja como
+  cita del teléfono; en la consola (`comoConductor: false`) solo la actualiza. Rechaza otro día y un
+  número de cita usado por otro contenedor. `Importar.tsx` borra el `#` de la URL al leerlo.
+- **Panel de la demo** (`src/features/demo/PanelDemo.tsx`): simula terminal (aceptar/cambiar posición,
+  hitos, nave adelanta 12 h) y QR en ambos sentidos. La consola completa de la Fase 4 debe reutilizar
+  `decidirPosicion` y `puntuarPosicion`.
+- **Banner de conexión** (`components/BannerConexion.tsx`, en Layout): "Sin señal: usando datos
+  guardados (al HH:MM)" con `DemoState.actualizadoEn`; "Conexión recuperada" 4 s.
 - **Momento de cálculo** en pantalla: `momentoCalculo()` redondea a 15 min para que la sugerencia no
   cambie de un segundo a otro.
 - **Sin servicios externos**: tipografías del sistema (Cambria/Georgia; Inter/Calibri/Segoe UI), sin
   Google Fonts ni analítica (Ley 21.719: todo queda en el dispositivo; sin geolocalización continua).
-- **Dos dispositivos sin servidor** (Fase 3): QR con el estado de la cita en el `#` de la URL; si el
-  planificador cambia algo después, hay que volver a escanear. Decirlo así en la app.
 
 ## Diseño
 Azul marino `#21295C`, petróleo `#065A82` / `#1C7293`, acento naranja `#E8963D` (no usar como color

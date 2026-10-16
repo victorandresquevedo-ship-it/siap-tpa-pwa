@@ -54,13 +54,43 @@ del mismo navegador.
 Si abres la app en el celular con la dirección de red local (`http://192.168...`), usa
 **Tomar foto de la guía**, que sí funciona, o publica la app en Vercel (https).
 
+## Probar el seguimiento (Modo C) con el Panel de la demo
+
+El **Panel de la demo** (`/demo`, enlace en el pie de página) simula lo que haría la terminal, para
+mostrar el seguimiento en vivo durante la presentación:
+
+1. Con una cita reservada, abre el seguimiento del conductor (`/conductor`) en una ventana angosta
+   (o en el modo dispositivo de Chrome) y el Panel de la demo en otra ventana.
+2. **Aceptar sugerencia**: el conductor recibe el aviso «Ya tienes posición en el patio».
+3. **Andes Express adelanta su embarque 12 h**: el tiempo estimado sube 6 min y muestra el motivo.
+4. **Cambiar a … · motivo: Bloque lleno**: aviso «Cambió tu posición» con el motivo, y el tiempo se
+   ajusta si cambia de bloque.
+5. **Registrar** los hitos (en ruta, antepuerto, garita) y **Atendido**: el conductor ve «Atendido en X
+   min, dentro de tu franja» y la encuesta de 5 caras.
+
+En el seguimiento, **Modo cabina** deja solo lo esencial en alto contraste y con cifras más grandes.
+Sin conexión aparece el aviso «Sin señal: usando datos guardados» y todo sigue visible.
+
+### Dos equipos sin servidor (QR)
+
+Sin servidor, los equipos se pasan la cita por QR:
+
+- **Del notebook al celular**: en el Panel de la demo (o en el seguimiento) toca **Modo demo dos
+  dispositivos** y escanea el código con la cámara del celular. Se abre la app y carga la cita.
+- **Del celular al notebook**: en el celular toca **Modo demo dos dispositivos**; en el notebook usa
+  **Leer QR del otro equipo** en el Panel de la demo.
+- Si algo cambia después, vuelve a generar y escanear el código.
+- El notebook debe abrir la app con la dirección de red (no `localhost`) o con la de Vercel, para que el
+  enlace del QR funcione en el celular. Los datos viajan después del `#` del enlace, que no se envía a
+  ningún servidor.
+
 ## Estructura
 
 ```
 src/
   engine/        Motor de asignación (función pura, determinista) y modelo del patio
   data/          Tipos, datos de ejemplo, fechas y capa de datos (store.ts)
-  features/      Pantallas: inicio, conductor, planificador, indicadores
+  features/      Pantallas: inicio, conductor, planificador, indicadores, demo (panel de la demo)
   components/    Piezas compartidas: layout, semáforo, íconos, "Reiniciar demo"
   pwa/           Service worker y cola de pendientes (Fase 5)
   styles/        Tema visual (colores y tipografías de la presentación)
@@ -93,7 +123,7 @@ El botón **Reiniciar demo** (pie de página) vuelve a los datos de ejemplo en c
 
 - [x] Fase 1: base, tema visual, rutas, datos de ejemplo y motor con pruebas
 - [x] Fase 2: Modo B (consentimiento, reserva en 2 pasos, QR, franja recomendada, SMS simulado, reprogramar)
-- [ ] Fase 3: Modo C (seguimiento, modo cabina, sin señal, QR de ingreso, encuesta) y sincronización
+- [x] Fase 3: Modo C (seguimiento, modo cabina, sin señal, QR de ingreso, encuesta), sincronización y Panel de la demo
 - [ ] Fase 4: Modo A (consola completa) y Modo D (indicadores)
 - [ ] Fase 5: PWA completa (instalable, offline, cola de pendientes), pulido y despliegue en Vercel
 

@@ -54,7 +54,11 @@ export function crearStoreLocal(): DataStore & { guardar(nuevo: DemoState): Prom
 
   /** Guarda un estado nuevo, avisa a esta pestaña y a las demás. */
   async function guardar(nuevo: DemoState): Promise<void> {
-    const siguiente = { ...nuevo, revision: Math.max(nuevo.revision, actual?.revision ?? 0) + 1 };
+    const siguiente = {
+      ...nuevo,
+      revision: Math.max(nuevo.revision, actual?.revision ?? 0) + 1,
+      actualizadoEn: new Date().toISOString(),
+    };
     actual = siguiente;
     avisar();
     await escribir(siguiente);
@@ -108,6 +112,13 @@ export function crearStoreLocal(): DataStore & { guardar(nuevo: DemoState): Prom
     reprogramarCita: (citaId, fecha, franja) =>
       modificar((s) => acciones.reprogramarCita(s, citaId, fecha, franja, new Date())),
     borrarMisDatos: () => modificar((s) => acciones.borrarMisDatos(s)),
+    responderEncuesta: (citaId, nota) => modificar((s) => acciones.responderEncuesta(s, citaId, nota, new Date())),
+    marcarAvisosVistos: (citaId) => modificar((s) => acciones.marcarAvisosVistos(s, citaId)),
+    importarCita: (paquete, opciones) => modificar((s) => acciones.importarCita(s, paquete, opciones)),
+    decidirPosicion: (citaId, decision) => modificar((s) => acciones.decidirPosicion(s, citaId, decision, new Date())),
+    registrarHito: (citaId, estado, opciones) =>
+      modificar((s) => acciones.registrarHito(s, citaId, estado, new Date(), opciones)),
+    adelantarEmbarque: (naveId, horas) => modificar((s) => acciones.adelantarEmbarque(s, naveId, horas, new Date())),
     guardar,
   };
   return api;

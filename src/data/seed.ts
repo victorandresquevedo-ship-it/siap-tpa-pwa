@@ -16,6 +16,7 @@ import {
   type Pila,
 } from '../engine/yard';
 import { enDia, fechaISO } from './fechas';
+import { estimarAlReservar } from './seguimiento';
 import type {
   Cita,
   Conductor,
@@ -30,7 +31,7 @@ import type {
 } from './types';
 
 /** Sube este número cuando cambie la forma de DemoState: fuerza a regenerar los datos guardados. */
-export const VERSION_ESQUEMA = 2;
+export const VERSION_ESQUEMA = 3;
 
 export const PUERTOS: Puerto[] = [
   { codigo: 'CNSHA', nombre: 'Shanghái', pais: 'China', region: 'Asia' },
@@ -270,6 +271,7 @@ export function crearEstadoDemo(ahora: Date = new Date()): DemoState {
   const citas: Cita[] = [];
   const eventos: Evento[] = [];
   let patio = crearPatioInicial();
+  const diaBase = fechaISO(ahora);
   const decisionISO = enDia(ahora, 0, 6).toISOString();
   const evento = (e: Omit<Evento, 'id'>) =>
     eventos.push({ id: `E${String(eventos.length + 1).padStart(3, '0')}`, ...e });
@@ -288,15 +290,20 @@ export function crearEstadoDemo(ahora: Date = new Date()): DemoState {
 
     const id = `C${String(i + 1).padStart(3, '0')}`;
     const creadaEn = (dia === 0 ? enDia(ahora, -1, 18, i) : enDia(ahora, 0, 7, i)).toISOString();
+    const fecha = fechaISO(enDia(ahora, dia, 0));
+    const estimacion = estimarAlReservar({ diaBase, citas }, fecha, franja);
     const cita: Cita = {
       id,
       contenedorId: contenedor.id,
       conductorId: conductores[i % 20].id,
-      fecha: fechaISO(enDia(ahora, dia, 0)),
+      fecha,
       franja,
       estado,
       posicion: null,
       reprogramaciones: 0,
+      enFilaDesde: creadaEn,
+      tiempoEstimado: [{ en: creadaEn, minutos: estimacion.minutos, delta: 0, motivo: estimacion.motivo }],
+      avisos: [],
       creadaEn,
       actualizadaEn: creadaEn,
     };
@@ -341,8 +348,9 @@ export function crearEstadoDemo(ahora: Date = new Date()): DemoState {
 
   return {
     version: VERSION_ESQUEMA,
-    diaBase: fechaISO(ahora),
+    diaBase,
     revision: 0,
+    actualizadoEn: decisionISO,
     puertos: PUERTOS,
     naves,
     conductores,

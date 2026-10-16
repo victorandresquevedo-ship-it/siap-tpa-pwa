@@ -3,9 +3,10 @@
 // las pantallas solo conocen esta interfaz.
 
 import { useEffect, useSyncExternalStore } from 'react';
-import type { DatosReserva } from './acciones';
+import type { DatosReserva, DecisionPosicion, OpcionesAtencion } from './acciones';
 import { crearStoreLocal } from './localStore';
-import type { Cita, DemoState } from './types';
+import type { PaqueteCita } from './paquete';
+import type { Cita, DemoState, EstadoCita } from './types';
 
 export type Escucha = () => void;
 
@@ -25,7 +26,18 @@ export interface DataStore {
   reservarCita(datos: DatosReserva): Promise<Cita>;
   reprogramarCita(citaId: string, fecha: string, franja: number): Promise<Cita>;
   borrarMisDatos(): Promise<void>;
-  // Las operaciones del planificador (aceptar o modificar posición) se agregan en la Fase 4.
+  responderEncuesta(citaId: string, nota: 1 | 2 | 3 | 4 | 5): Promise<void>;
+  marcarAvisosVistos(citaId: string): Promise<void>;
+  /**
+   * Carga la cita que trae el QR de "Modo demo dos dispositivos". comoConductor (por defecto sí)
+   * la deja como la cita de este teléfono; en la consola se usa false.
+   */
+  importarCita(paquete: PaqueteCita, opciones?: { comoConductor?: boolean }): Promise<Cita>;
+
+  // Planificador y terminal.
+  decidirPosicion(citaId: string, decision: DecisionPosicion): Promise<Cita>;
+  registrarHito(citaId: string, estado: EstadoCita, opciones?: OpcionesAtencion): Promise<Cita>;
+  adelantarEmbarque(naveId: string, horas: number): Promise<number>;
 }
 
 export const store: DataStore = crearStoreLocal();

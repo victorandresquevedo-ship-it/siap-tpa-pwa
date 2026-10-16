@@ -48,6 +48,13 @@ export type EstadoCita = 'reservada' | 'en_ruta' | 'antepuerto' | 'garita' | 'at
 
 export type MotivoCambio = 'bloque_lleno' | 'mantencion' | 'pedido_patio' | 'otro';
 
+export const TEXTO_MOTIVO: Record<MotivoCambio, string> = {
+  bloque_lleno: 'Bloque lleno',
+  mantencion: 'Mantención',
+  pedido_patio: 'Pedido del patio',
+  otro: 'Otro motivo',
+};
+
 export interface PosicionAsignada {
   /** Coordenada Baroti definitiva. */
   codigo: string;
@@ -66,6 +73,28 @@ export interface Atencion {
   encuesta?: 1 | 2 | 3 | 4 | 5;
 }
 
+/**
+ * Un valor del tiempo estimado de atención. El tiempo solo cambia con un motivo:
+ * cada cambio queda registrado y el conductor ve siempre el último motivo.
+ */
+export interface CambioTiempo {
+  en: string;
+  /** Tiempo estimado de atención vigente desde este cambio (minutos). */
+  minutos: number;
+  /** Diferencia con el valor anterior (0 en la primera estimación). */
+  delta: number;
+  motivo: string;
+}
+
+/** Aviso destacado para el conductor (por ejemplo, un cambio de posición). */
+export interface AvisoConductor {
+  id: string;
+  en: string;
+  titulo: string;
+  detalle: string;
+  visto: boolean;
+}
+
 export interface Cita {
   id: string;
   contenedorId: string;
@@ -78,6 +107,11 @@ export interface Cita {
   /** null mientras el planificador no decide. */
   posicion: PosicionAsignada | null;
   reprogramaciones: number;
+  /** Momento en que la cita entró a su franja actual (ordena la fila). */
+  enFilaDesde: string;
+  /** Historial del tiempo estimado; el último es el vigente. */
+  tiempoEstimado: CambioTiempo[];
+  avisos: AvisoConductor[];
   atencion?: Atencion;
   creadaEn: string;
   actualizadaEn: string;
@@ -89,7 +123,8 @@ export type TipoEvento =
   | 'posicion_aceptada'
   | 'posicion_modificada'
   | 'estado_cambiado'
-  | 'embarque_adelantado';
+  | 'embarque_adelantado'
+  | 'encuesta_respondida';
 
 export interface Evento {
   id: string;
@@ -115,6 +150,8 @@ export interface DemoState {
   diaBase: string;
   /** Contador que sube con cada cambio guardado (sirve para sincronizar pestañas). */
   revision: number;
+  /** Último guardado (ISO 8601): se muestra cuando no hay señal ("datos de las 10:42"). */
+  actualizadoEn: string;
   puertos: Puerto[];
   naves: Nave[];
   conductores: Conductor[];
