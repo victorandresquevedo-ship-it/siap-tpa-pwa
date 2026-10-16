@@ -486,3 +486,29 @@ export function importarCita(
     resultado: cita,
   };
 }
+
+// ---------- Cola "pendiente de enviar" (cambios hechos sin señal) ----------
+
+/** Agrega a la cola local un cambio hecho sin señal. */
+export function encolarPendiente(estado: DemoState, citaId: string, descripcion: string, ahora: Date): DemoState {
+  const id = siguienteId('P', estado.pendientes.map((p) => p.id), 3);
+  return {
+    ...estado,
+    pendientes: [...estado.pendientes, { id, en: ahora.toISOString(), citaId, descripcion, enviadoEn: null }],
+  };
+}
+
+export function pendientesSinEnviar(estado: Pick<DemoState, 'pendientes'>, citaId?: string) {
+  return estado.pendientes.filter((p) => !p.enviadoEn && (!citaId || p.citaId === citaId));
+}
+
+/** Volvió la señal: se envían (simulado) los cambios de la cola. Devuelve cuántos se enviaron. */
+export function enviarPendientes(estado: DemoState, ahora: Date): Cambio<number> {
+  const enviados = pendientesSinEnviar(estado).length;
+  if (enviados === 0) return { estado, resultado: 0 };
+  const en = ahora.toISOString();
+  return {
+    estado: { ...estado, pendientes: estado.pendientes.map((p) => (p.enviadoEn ? p : { ...p, enviadoEn: en })) },
+    resultado: enviados,
+  };
+}

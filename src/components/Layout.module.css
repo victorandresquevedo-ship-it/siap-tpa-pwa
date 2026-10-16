@@ -65,6 +65,26 @@
 .principal {
   flex: 1;
 }
+.principal:focus {
+  outline: none;
+}
+
+/* Enlace "Saltar al contenido": invisible hasta recibir el foco con el teclado. */
+.saltar {
+  position: absolute;
+  left: 8px;
+  top: -60px;
+  z-index: 10;
+  padding: 10px 16px;
+  border-radius: var(--radio-chico);
+  background: var(--naranja);
+  color: var(--azul-marino);
+  font-weight: 700;
+  text-decoration: none;
+}
+.saltar:focus {
+  top: 8px;
+}
 
 .pie {
   border-top: 1px solid var(--borde);

@@ -423,7 +423,7 @@
 .altura1 { background: #e3eef5; }
 .altura2 { background: #c5dceb; }
 .altura3 { background: #9cc3dc; }
-.altura4 { background: #6aa3c8; color: #fff; }
+.altura4 { background: #6aa3c8; color: var(--azul-marino); }
 .altura5 { background: #2f6f9a; color: #fff; }
 
 .leyendaMapa {

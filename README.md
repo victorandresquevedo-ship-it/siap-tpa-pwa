@@ -34,8 +34,82 @@ Para verla en el celular conectado a la misma red wifi, usa la dirección **Netw
 |---|---|
 | `npm run dev` | Servidor de desarrollo con recarga automática |
 | `npm test` | Pruebas del motor de asignación y de los datos de ejemplo (Vitest) |
-| `npm run build` | Revisa tipos y compila la versión final en `dist/` |
+| `npm run build` | Revisa tipos y compila la versión final en `dist/` (con service worker) |
 | `npm run preview` | Sirve la versión compilada (`http://localhost:4173`) |
+| `npm run iconos` | Vuelve a generar los íconos PNG de `public/icons/` |
+
+## Probar que es una PWA de verdad (sin señal)
+
+El service worker **solo funciona en la versión compilada**, no en `npm run dev`:
+
+```bash
+npm run build
+npm run preview
+```
+
+1. Abre `http://localhost:4173` en Chrome y recorre la app una vez (la primera visita guarda todo; aparece
+   «Listo: la app quedó guardada en este equipo y funciona sin señal»).
+2. F12 → pestaña **Application**:
+   - **Manifest**: nombre «SIAP-TPA · Prototipo», íconos 192 y 512 (y uno *maskable*), sin errores.
+   - **Service Workers**: `sw.js` activo.
+3. **Prueba sin señal**: en Application → Service Workers marca **Offline** (o en Network elige
+   **Offline**) y recarga. La app abre igual, muestra el banner «Sin señal: usando datos guardados» y
+   sigue mostrando tu cita, el tiempo estimado con su motivo, la posición y el QR de ingreso.
+4. **Cola «pendiente de enviar»**: sin señal, reprograma la cita. Queda la marca «Pendiente de enviar» y el
+   banner cuenta los cambios. Al quitar Offline aparece «enviando…» y luego «✓ 1 cambio enviado» (sin
+   servidor, el envío es simulado).
+5. **Lighthouse** (F12 → Lighthouse): revisa *Accessibility* y *Best practices*. Las versiones nuevas de
+   Chrome ya no traen la categoría «PWA»; la instalabilidad se revisa en Application → Manifest.
+
+## Publicar en Vercel y llevarla al celular
+
+La app necesita **https** para instalarse y para usar la cámara en vivo; Vercel lo da gratis.
+
+1. En github.com crea un repositorio **vacío** (sin README) llamado, por ejemplo, `siap-tpa-pwa`.
+2. En la carpeta del proyecto (la rama ya se llama `main`):
+   ```bash
+   git remote add origin https://github.com/TU-USUARIO/siap-tpa-pwa.git
+   ```
+   ```bash
+   git push -u origin main
+   ```
+3. En vercel.com: **Add New → Project →** elige el repositorio → **Deploy**. Vercel detecta Vite; la
+   configuración ya está en `vercel.json` (compila con `npm run build`, publica `dist/`, y todas las rutas
+   como `/conductor/cita` abren la app). No hay variables de entorno.
+4. En el celular abre la dirección `https://…vercel.app` en Chrome → menú ⋮ → **Instalar aplicación** (o
+   «Añadir a pantalla de inicio»).
+5. Abre la app instalada, recorre la reserva, pon el **modo avión** y vuelve a abrirla: debe mostrar la
+   cita, el tiempo, la posición y el QR de ingreso.
+
+Cada `git push` a `main` publica una versión nueva. La app instalada se actualiza sola la próxima vez
+que se abre con señal (si no, ciérrala por completo y ábrela de nuevo).
+
+## Guion sugerido para la demo (3 minutos)
+
+Notebook con la consola (`/planificador`) y el Panel de la demo (`/demo`); celular con la app instalada.
+
+1. **Conductor reserva en 2 pasos** (celular): Soy conductor → Freddy Choque → escanea la guía de ejemplo
+   (abre `/guia-ejemplo` en el notebook) → la franja recomendada de mañana ya viene marcada → Confirmar.
+2. **La consola muestra la cita** (notebook): «Leer QR del celular» con el QR «Modo demo dos dispositivos»
+   del celular. Aparece en la cola con la posición sugerida en el bloque 40 y el «¿Por qué?».
+3. **El planificador acepta con un toque** y muestra el QR para el celular.
+4. **El celular muestra el aviso y el tiempo estimado** al escanear ese QR. En el Panel de la demo,
+   «Andes Express adelanta su embarque»: el tiempo sube 6 min con su motivo (vuelve a pasar el QR).
+5. **Modo avión**: el celular sigue mostrando la posición, el tiempo y el QR de ingreso para garita.
+
+Si usas un solo notebook, abre el conductor en una ventana angosta y la consola en otra: se sincronizan
+solas, sin QR. Antes de empezar toca **Reiniciar demo** en ambos equipos.
+
+**Plan B**: lleva capturas o un video corto del recorrido por si falla el wifi.
+
+## Si algo se complica
+
+- **La página queda en blanco o con un error**: aparece «Algo salió mal en esta pantalla» con botones
+  para volver al inicio o reiniciar la demo. Los datos siguen guardados.
+- **No se actualiza la versión instalada**: cierra la app por completo y ábrela de nuevo.
+- **El QR de dos equipos no abre en el celular**: el notebook debe usar la dirección de red o la de
+  Vercel, no `localhost`.
+- **La cámara no abre**: usa «Tomar foto de la guía» o «Usar guía de ejemplo».
 
 ## Probar la reserva del conductor (Modo B)
 
@@ -109,9 +183,11 @@ src/
   engine/        Motor de asignación (función pura, determinista) y modelo del patio
   data/          Tipos, datos de ejemplo, fechas y capa de datos (store.ts)
   features/      Pantallas: inicio, conductor, planificador, indicadores, demo (panel de la demo)
-  components/    Piezas compartidas: layout, semáforo, íconos, "Reiniciar demo"
-  pwa/           Service worker y cola de pendientes (Fase 5)
+  components/    Piezas compartidas: layout, banner de conexión, semáforo, QR, íconos, "Reiniciar demo"
+  pwa/           Registro del service worker, estado de conexión y envío de la cola de pendientes
   styles/        Tema visual (colores y tipografías de la presentación)
+public/icons/    Íconos de la PWA (generados con scripts/generar-iconos.mjs)
+vercel.json      Configuración de despliegue en Vercel
 ```
 
 ## Motor de asignación (`src/engine/assign.ts`)
@@ -143,6 +219,11 @@ El botón **Reiniciar demo** (pie de página) vuelve a los datos de ejemplo en c
 - [x] Fase 2: Modo B (consentimiento, reserva en 2 pasos, QR, franja recomendada, SMS simulado, reprogramar)
 - [x] Fase 3: Modo C (seguimiento, modo cabina, sin señal, QR de ingreso, encuesta), sincronización y Panel de la demo
 - [x] Fase 4: Modo A (consola completa con mapa del patio) y Modo D (indicadores M1–M8)
-- [ ] Fase 5: PWA completa (instalable, offline, cola de pendientes), pulido y despliegue en Vercel
+- [x] Fase 5: PWA completa (instalable, offline, cola de pendientes), accesibilidad y despliegue en Vercel
 
-Las secciones "Probar sin señal" y "Publicar en Vercel" se completan en la Fase 5.
+## Privacidad (Ley 21.719)
+
+Antes del modo conductor se pide consentimiento: qué datos se usan (nombre, patente, teléfono), para
+qué, y que solo se registran hitos (antepuerto y garita), nunca la ubicación continua. No hay
+geolocalización, analítica ni servicios externos (ni siquiera tipografías de Google): todo queda en el
+dispositivo. «Borrar mis datos» está en el modo conductor.

@@ -31,7 +31,7 @@ import type {
 } from './types';
 
 /** Sube este número cuando cambie la forma de DemoState: fuerza a regenerar los datos guardados. */
-export const VERSION_ESQUEMA = 3;
+export const VERSION_ESQUEMA = 4;
 
 export const PUERTOS: Puerto[] = [
   { codigo: 'CNSHA', nombre: 'Shanghái', pais: 'China', region: 'Asia' },
@@ -359,5 +359,6 @@ export function crearEstadoDemo(ahora: Date = new Date()): DemoState {
     patio,
     eventos,
     dispositivo: { consentimientoEn: null, conductorId: null, citaId: null },
+    pendientes: [],
   };
 }

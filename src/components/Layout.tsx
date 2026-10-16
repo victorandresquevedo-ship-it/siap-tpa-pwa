@@ -1,6 +1,8 @@
+import { useEffect } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { BannerConexion } from './BannerConexion';
 import { BotonReiniciar } from './BotonReiniciar';
+import { ErrorPantalla } from './ErrorPantalla';
 import s from './Layout.module.css';
 
 const SECCIONES: [prefijo: string, nombre: string][] = [
@@ -15,8 +17,16 @@ export function Layout() {
   const { pathname } = useLocation();
   const seccion = SECCIONES.find(([prefijo]) => pathname.startsWith(prefijo))?.[1];
 
+  // Título de la pestaña según la pantalla (ayuda a lectores de pantalla y al cambiar de ventana).
+  useEffect(() => {
+    document.title = seccion ? `${seccion} · SIAP-TPA` : 'SIAP-TPA · Prototipo';
+  }, [seccion]);
+
   return (
     <div className={s.marco}>
+      <a href="#contenido" className={s.saltar}>
+        Saltar al contenido
+      </a>
       <header className={s.cabecera}>
         <div className={s.barra}>
           <Link to="/" className={s.marca} aria-label="SIAP-TPA, volver al inicio">
@@ -30,8 +40,10 @@ export function Layout() {
         Prototipo de demostración, datos simulados
       </p>
       <BannerConexion />
-      <main className={s.principal} id="contenido">
-        <Outlet />
+      <main className={s.principal} id="contenido" tabIndex={-1}>
+        <ErrorPantalla key={pathname}>
+          <Outlet />
+        </ErrorPantalla>
       </main>
       <footer className={s.pie}>
         <div className={s.pieInterior}>

@@ -4,7 +4,7 @@
 
 import { createStore, get, set, type UseStore } from 'idb-keyval';
 import * as acciones from './acciones';
-import { fechaISO } from './fechas';
+import { fechaISO, textoFranja } from './fechas';
 import { VERSION_ESQUEMA, crearEstadoDemo } from './seed';
 import type { DataStore, Escucha } from './store';
 import type { DemoState } from './types';
@@ -72,6 +72,24 @@ export function crearStoreLocal(): DataStore & { guardar(nuevo: DemoState): Prom
     return resultado;
   }
 
+  const sinSenal = () => typeof navigator !== 'undefined' && navigator.onLine === false;
+
+  /**
+   * Operación del conductor: si no hay señal, además queda en la cola "pendiente de enviar".
+   * (Sin servidor, "enviar" es simulado: se marca enviado cuando vuelve la conexión.)
+   */
+  function delConductor<T>(
+    operacion: (estado: DemoState) => acciones.Cambio<T>,
+    pendiente: (resultado: T) => { citaId: string; descripcion: string },
+  ): Promise<T> {
+    return modificar((s) => {
+      const cambio = operacion(s);
+      if (!sinSenal()) return cambio;
+      const { citaId, descripcion } = pendiente(cambio.resultado);
+      return { ...cambio, estado: acciones.encolarPendiente(cambio.estado, citaId, descripcion, new Date()) };
+    });
+  }
+
   // Otra pestaña guardó: se adopta lo que quedó en IndexedDB (el último en escribir gana).
   canal?.addEventListener('message', async (ev: MessageEvent<MensajeCanal>) => {
     if (ev.data?.tipo !== 'cambio') return;
@@ -108,11 +126,23 @@ export function crearStoreLocal(): DataStore & { guardar(nuevo: DemoState): Prom
     },
     aceptarConsentimiento: () => modificar((s) => acciones.aceptarConsentimiento(s, new Date())),
     elegirConductor: (conductorId) => modificar((s) => acciones.elegirConductor(s, conductorId)),
-    reservarCita: (datos) => modificar((s) => acciones.reservarCita(s, datos, new Date())),
+    reservarCita: (datos) =>
+      delConductor(
+        (s) => acciones.reservarCita(s, datos, new Date()),
+        (cita) => ({ citaId: cita.id, descripcion: `Reserva ${textoFranja(cita.franja)}` }),
+      ),
     reprogramarCita: (citaId, fecha, franja) =>
-      modificar((s) => acciones.reprogramarCita(s, citaId, fecha, franja, new Date())),
+      delConductor(
+        (s) => acciones.reprogramarCita(s, citaId, fecha, franja, new Date()),
+        (cita) => ({ citaId: cita.id, descripcion: `Reprogramación a ${textoFranja(cita.franja)}` }),
+      ),
     borrarMisDatos: () => modificar((s) => acciones.borrarMisDatos(s)),
-    responderEncuesta: (citaId, nota) => modificar((s) => acciones.responderEncuesta(s, citaId, nota, new Date())),
+    responderEncuesta: (citaId, nota) =>
+      delConductor(
+        (s) => acciones.responderEncuesta(s, citaId, nota, new Date()),
+        () => ({ citaId, descripcion: 'Respuesta de la encuesta' }),
+      ),
+    enviarPendientes: () => modificar((s) => acciones.enviarPendientes(s, new Date())),
     marcarAvisosVistos: (citaId) => modificar((s) => acciones.marcarAvisosVistos(s, citaId)),
     importarCita: (paquete, opciones) => modificar((s) => acciones.importarCita(s, paquete, opciones)),
     decidirPosicion: (citaId, decision) => modificar((s) => acciones.decidirPosicion(s, citaId, decision, new Date())),

@@ -134,6 +134,16 @@ export interface Evento {
   detalle: string;
 }
 
+/** Cambio hecho sin señal: queda en una cola local hasta que vuelve la conexión. */
+export interface Pendiente {
+  id: string;
+  en: string;
+  citaId: string;
+  descripcion: string;
+  /** null mientras no se envía. */
+  enviadoEn: string | null;
+}
+
 /** Datos del conductor que usa este teléfono (consentimiento e identidad de la demo). */
 export interface Dispositivo {
   /** Momento en que aceptó el uso de datos (ISO 8601); null si no ha aceptado. */
@@ -160,4 +170,6 @@ export interface DemoState {
   patio: Patio;
   eventos: Evento[];
   dispositivo: Dispositivo;
+  /** Cola local de cambios hechos sin señal ("pendiente de enviar"). */
+  pendientes: Pendiente[];
 }

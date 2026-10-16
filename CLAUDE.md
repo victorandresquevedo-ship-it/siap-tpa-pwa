@@ -20,7 +20,11 @@ La especificación completa (prompt maestro) está en
 | 2 | Modo B: consentimiento, reserva 2 pasos, QR guía, franja recomendada, SMS simulado, reprogramar (+ QR de ingreso, "Borrar mis datos" y selector de conductor de ejemplo, adelantados) | Hecha |
 | 3 | Modo C: modo cabina, tiempo con motivo, aviso de cambio, banner sin señal, encuesta; QR "dos dispositivos"; Panel de la demo (`/demo`) | Hecha |
 | 4 | Modo A: consola, mapa por bloques, panel "por qué", alternativas, aceptar/modificar con motivo en 1 toque; Modo D: M1–M8 | Hecha |
-| 5 | vite-plugin-pwa (precache, manifest, íconos 192/512), cola "pendiente de enviar", accesibilidad, README, Vercel | Pendiente |
+| 5 | vite-plugin-pwa (precache, manifest, íconos 192/512), cola "pendiente de enviar", accesibilidad, README, Vercel | Hecha |
+
+Las 5 fases están hechas. Lo que siga son ajustes que pida el usuario (los "prompts cortos" de la
+especificación: ajuste visual a 360 px, guía de pruebas offline, datos para la historia de la demo,
+despliegue, revisión final contra los criterios de aceptación).
 
 ## Stack
 Vite 8 + React 19 + TypeScript 7 (tsc nativo) + React Router 7 (BrowserRouter), CSS global con
@@ -88,6 +92,21 @@ p. ej. Chrome de Windows), vite-plugin-pwa 2 (Fase 5), Vitest 5.
   calculan con la demo; M2, M3 y M8 son estimaciones marcadas "simulado". Semáforo por avance desde la
   línea base (`LINEA_BASE`) hacia la meta: ≥1 verde, ≥0,5 amarillo, si no rojo. La consola muestra M1,
   M4 y M6.
+- **PWA** (`vite.config.ts`): `VitePWA` con `generateSW`, `registerType: 'autoUpdate'`,
+  `injectRegister: false` (registro en `src/pwa/registrarSW.ts`, que avisa "lista sin señal" con
+  `onOfflineReady`), precache de `**/*.{js,css,html,svg,png,webmanifest}` y `navigateFallback:
+  'index.html'`. Solo activo en build/preview (no en dev). Manifest en es-CL, theme #21295C, íconos 192,
+  512 y maskable 512 en `public/icons/` (`npm run iconos`, script sin dependencias que dibuja y escribe
+  PNG con zlib) + apple-touch-icon 180.
+- **Cola "pendiente de enviar"** (`DemoState.pendientes`, `encolarPendiente`/`enviarPendientes` en
+  acciones): `localStore.delConductor` encola reservar, reprogramar y encuesta si `navigator.onLine` es
+  false. `src/pwa/cola.ts` envía (simulado, 1,5 s) al volver la señal y al iniciar. MiCita muestra
+  "Pendiente de enviar"; el banner cuenta los pendientes y anuncia "✓ N cambios enviados".
+- **Accesibilidad**: enlace "Saltar al contenido", `document.title` por pantalla, `ErrorPantalla`
+  (error boundary por ruta), `prefers-reduced-motion`, contraste AA revisado (la altura 4 del mapa usa
+  texto azul marino). Un solo `h1` por pantalla.
+- **Vercel** (`vercel.json`): framework vite, `npm run build` → `dist`, rewrite de todo a
+  `/index.html`, `sw.js` sin caché.
 - **Banner de conexión** (`components/BannerConexion.tsx`, en Layout): "Sin señal: usando datos
   guardados (al HH:MM)" con `DemoState.actualizadoEn`; "Conexión recuperada" 4 s.
 - **Momento de cálculo** en pantalla: `momentoCalculo()` redondea a 15 min para que la sugerencia no
@@ -105,8 +124,11 @@ de texto: no cumple AA), fondo `#F4F7FA`, tarjetas blancas con borde `#D9E3E8`. 
 - npm de este equipo bloquea scripts de instalación (no usar dependencias que los necesiten, p. ej. `sharp`).
 - El watcher de Vite a veces no detecta dos ediciones muy seguidas: si la página queda en blanco con
   un error viejo, guardar el archivo de nuevo (o `touch`) y recargar.
-- Configuración de vista previa para Claude Code: `.claude/launch.json` (puerto 5173). Si la sesión
-  partió en otra carpeta, el panel de vista previa lee el `launch.json` de esa carpeta: en
-  `C:\Users\lavez\electricista-arica\.claude\launch.json` existe `siap-dev` (puerto 5180) para eso.
+- Configuración de vista previa para Claude Code: `.claude/launch.json` (`siap-dev` 5173 y
+  `siap-preview` 4173). Si la sesión partió en otra carpeta, el panel de vista previa lee el
+  `launch.json` de esa carpeta: en `C:\Users\lavez\electricista-arica\.claude\launch.json` existen
+  `siap-dev` (5180) y `siap-preview` (5181).
+- Prueba offline real hecha: build + preview, reservar, detener el servidor y recargar → la app abre
+  desde el service worker (todas las rutas).
 - `optimizeDeps.include` en `vite.config.ts` evita que Vite recargue la página la primera vez que se
   usa una dependencia (agregar ahí las nuevas dependencias de la app).

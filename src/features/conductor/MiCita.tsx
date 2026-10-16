@@ -17,6 +17,7 @@ import {
   textoMotivoTiempo,
   tiempoVigente,
 } from '../../data/seguimiento';
+import { pendientesSinEnviar } from '../../data/acciones';
 import { store } from '../../data/store';
 import type { Cita, DemoState } from '../../data/types';
 import { PieConductor, citaActual, datosCita } from './comun';
@@ -160,6 +161,7 @@ export function MiCita({ demo }: { demo: DemoState }) {
   const tiempo = tiempoVigente(cita);
   const fila = lugarEnFila(demo, cita);
   const terminada = cita.estado === 'atendido';
+  const pendientes = pendientesSinEnviar(demo, cita.id).length;
   const puedeReprogramar = cita.estado === 'reservada' || cita.estado === 'en_ruta';
   const sms =
     `SIAP-TPA: Cita ${cita.id} ${cita.reprogramaciones > 0 ? 'reprogramada' : 'confirmada'}. ` +
@@ -171,13 +173,17 @@ export function MiCita({ demo }: { demo: DemoState }) {
       {aviso && verMensaje && !cabina && (
         <p role="status" className="aviso-ok">
           {AVISOS_NAVEGACION[aviso]}
+          {pendientes > 0 && ' Quedó guardada en este teléfono y se enviará cuando vuelva la señal.'}
         </p>
       )}
 
       <div className={s.barraSeguimiento}>
-        <Semaforo nivel="neutro">
-          Cita {cita.id} · {TEXTO_ESTADO[cita.estado]}
-        </Semaforo>
+        <span style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          <Semaforo nivel="neutro">
+            Cita {cita.id} · {TEXTO_ESTADO[cita.estado]}
+          </Semaforo>
+          {pendientes > 0 && <Semaforo nivel="amarillo">Pendiente de enviar</Semaforo>}
+        </span>
         <button type="button" className="btn btn--secundario" aria-pressed={cabina} onClick={alternarCabina}>
           {cabina ? 'Salir de modo cabina' : 'Modo cabina'}
         </button>

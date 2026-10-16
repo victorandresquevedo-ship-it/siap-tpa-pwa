@@ -28,6 +28,8 @@ export interface DataStore {
   borrarMisDatos(): Promise<void>;
   responderEncuesta(citaId: string, nota: 1 | 2 | 3 | 4 | 5): Promise<void>;
   marcarAvisosVistos(citaId: string): Promise<void>;
+  /** Envía (simulado) los cambios hechos sin señal. Devuelve cuántos se enviaron. */
+  enviarPendientes(): Promise<number>;
   /**
    * Carga la cita que trae el QR de "Modo demo dos dispositivos". comoConductor (por defecto sí)
    * la deja como la cita de este teléfono; en la consola se usa false.

@@ -246,6 +246,17 @@ textarea {
   height: auto;
 }
 
+/* Quien pide menos movimiento en su sistema no ve animaciones. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 .mono {
   font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
   letter-spacing: 0.02em;
