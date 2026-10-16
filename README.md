@@ -54,6 +54,24 @@ del mismo navegador.
 Si abres la app en el celular con la dirección de red local (`http://192.168...`), usa
 **Tomar foto de la guía**, que sí funciona, o publica la app en Vercel (https).
 
+## Probar la consola del planificador (Modo A) y los indicadores (Modo D)
+
+1. Abre **Soy planificador de patio** (`/planificador`) en el notebook.
+2. Arriba ves tres indicadores del turno (M1 atención, M4 sugerencias aceptadas, M6 cumplimiento de franja).
+3. En la **cola de ingresos** elige una cita pendiente: a la derecha aparece la **posición sugerida**
+   (coordenada Baroti), el panel **«¿Por qué esta posición?»** con el aporte de cada criterio y **dos
+   alternativas** con su puntaje.
+4. **Aceptar**: un toque. **Modificar**: toca una alternativa (o una pila con borde azul en el mapa) y
+   luego el **motivo** en un toque (bloque lleno, mantención, pedido del patio u otro).
+5. El **mapa del patio** muestra los bloques 10 a 90 con su ocupación (color y texto), el bloque en
+   mantención y las marcas de la sugerida y las alternativas; abajo, las bahías y filas del bloque.
+6. Si el conductor tiene la app abierta en otra pestaña, recibe el aviso al instante. Si está en otro
+   teléfono, escanea el QR que aparece después de decidir. Con **Leer QR del celular** la consola carga
+   una cita reservada en el teléfono del conductor.
+7. **Ver indicadores del turno** (`/indicadores`) muestra M1 a M8 con valor, meta, línea base y
+   semáforo. Se actualizan en vivo; cada tarjeta dice si se calcula con los datos de la demo o si es una
+   estimación simulada.
+
 ## Probar el seguimiento (Modo C) con el Panel de la demo
 
 El **Panel de la demo** (`/demo`, enlace en el pie de página) simula lo que haría la terminal, para
@@ -124,7 +142,7 @@ El botón **Reiniciar demo** (pie de página) vuelve a los datos de ejemplo en c
 - [x] Fase 1: base, tema visual, rutas, datos de ejemplo y motor con pruebas
 - [x] Fase 2: Modo B (consentimiento, reserva en 2 pasos, QR, franja recomendada, SMS simulado, reprogramar)
 - [x] Fase 3: Modo C (seguimiento, modo cabina, sin señal, QR de ingreso, encuesta), sincronización y Panel de la demo
-- [ ] Fase 4: Modo A (consola completa) y Modo D (indicadores)
+- [x] Fase 4: Modo A (consola completa con mapa del patio) y Modo D (indicadores M1–M8)
 - [ ] Fase 5: PWA completa (instalable, offline, cola de pendientes), pulido y despliegue en Vercel
 
 Las secciones "Probar sin señal" y "Publicar en Vercel" se completan en la Fase 5.

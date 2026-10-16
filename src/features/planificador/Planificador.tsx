@@ -1,180 +1,219 @@
-// Fase 1: vista previa del motor de asignación sobre las citas pendientes.
-// La consola completa (mapa, aceptar/modificar, motivos) se construye en la Fase 4.
+// Consola del planificador (Modo A): cola de ingresos, posición sugerida con su porqué,
+// alternativas, Aceptar / Modificar con motivo en un toque, mapa del patio e indicadores del turno.
+// Al decidir, el conductor recibe el aviso (misma app en otra pestaña, o por QR en otro equipo).
 
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Semaforo } from '../../components/Semaforo';
-import { asignar, type Prioridad, type Sugerencia } from '../../engine/assign';
-import { momentoCalculo, textoDia, textoFechaHora, textoFranja } from '../../data/fechas';
-import { contenedorAsignable, nombrePuerto } from '../../data/seed';
-import { useDemo } from '../../data/store';
+import { asignar, puntuarPosicion, type EntradaAsignacion, type Sugerencia } from '../../engine/assign';
+import { parseBaroti } from '../../engine/yard';
+import { momentoCalculo } from '../../data/fechas';
+import { TEXTO_NIVEL, calcularIndicadores } from '../../data/indicadores';
+import { extraerPaquete } from '../../data/paquete';
+import { contenedorAsignable } from '../../data/seed';
+import { store, useDemo } from '../../data/store';
+import { TEXTO_MOTIVO, type MotivoCambio } from '../../data/types';
+import { ColaIngresos, type Filtro } from './ColaIngresos';
+import { MapaPatio } from './MapaPatio';
+import { PanelSugerencia, type Mensaje } from './PanelSugerencia';
 import s from './Planificador.module.css';
 
-const NIVEL_PRIORIDAD: Record<Prioridad, 'rojo' | 'amarillo' | 'verde'> = {
-  alta: 'rojo',
-  media: 'amarillo',
-  baja: 'verde',
-};
-
-function DetalleSugerencia({ sugerencia }: { sugerencia: Sugerencia }) {
-  return (
-    <ul className={s.criterios}>
-      {sugerencia.criterios.map((c) => (
-        <li key={c.clave}>
-          <div className={s.criterioCabecera}>
-            <span>{c.etiqueta}</span>
-            <span>
-              {c.puntos} / {c.max}
-            </span>
-          </div>
-          <div className={s.barra} aria-hidden="true">
-            <div className={s.barraRelleno} style={{ width: `${(c.puntos / c.max) * 100}%` }} />
-          </div>
-          <p className={s.criterioTexto}>{c.explicacion}</p>
-        </li>
-      ))}
-    </ul>
-  );
-}
+const KPIS_CONSOLA = ['M1', 'M4', 'M6'];
 
 export function Planificador() {
   const demo = useDemo();
+  const [filtro, setFiltro] = useState<Filtro>('pendientes');
   const [citaId, setCitaId] = useState<string | null>(null);
+  const [eligiendo, setEligiendo] = useState(false);
+  const [elegida, setElegida] = useState<Sugerencia | null>(null);
+  const [mensaje, setMensaje] = useState<Mensaje>(null);
+  const [decidida, setDecidida] = useState(false);
+  const [bloqueVisto, setBloqueVisto] = useState<number | null>(null);
   const ahora = momentoCalculo();
 
-  const pendientes = useMemo(
-    () =>
-      (demo?.citas ?? [])
-        .filter((c) => !c.posicion)
-        .sort((a, b) => a.fecha.localeCompare(b.fecha) || a.franja - b.franja),
+  const listas = useMemo(() => {
+    const activas = (demo?.citas ?? [])
+      .filter((c) => c.estado !== 'atendido')
+      .sort((a, b) => a.fecha.localeCompare(b.fecha) || a.franja - b.franja || a.id.localeCompare(b.id));
+    return {
+      pendientes: activas.filter((c) => !c.posicion),
+      con_posicion: activas.filter((c) => c.posicion),
+      todas: activas,
+    };
+  }, [demo]);
+
+  const cita = listas.todas.find((c) => c.id === citaId) ?? listas[filtro][0];
+
+  const entrada = useMemo<EntradaAsignacion | null>(() => {
+    if (!demo || !cita) return null;
+    const contenedor = demo.contenedores.find((c) => c.id === cita.contenedorId)!;
+    return { contenedor: contenedorAsignable(demo, contenedor), patio: demo.patio, ahora };
+  }, [demo, cita, ahora]);
+  const resultado = useMemo(() => (entrada ? asignar(entrada) : null), [entrada]);
+
+  const kpis = useMemo(
+    () => (demo ? calcularIndicadores(demo).filter((i) => KPIS_CONSOLA.includes(i.codigo)) : []),
     [demo],
   );
-  const seleccionada = pendientes.find((c) => c.id === citaId) ?? pendientes[0];
-
-  const resultado = useMemo(() => {
-    if (!demo || !seleccionada) return null;
-    const contenedor = demo.contenedores.find((c) => c.id === seleccionada.contenedorId)!;
-    return asignar({ contenedor: contenedorAsignable(demo, contenedor), patio: demo.patio, ahora });
-  }, [demo, seleccionada, ahora]);
 
   if (!demo) return <p className="contenido">Cargando datos de la demo…</p>;
 
+  function seleccionar(id: string) {
+    setCitaId(id);
+    setEligiendo(false);
+    setElegida(null);
+    setMensaje(null);
+    setDecidida(false);
+    setBloqueVisto(null);
+  }
+
+  async function decidir(sugerencia: Sugerencia, motivo?: MotivoCambio) {
+    if (!cita || !resultado?.mejor) return;
+    try {
+      const nueva = await store.decidirPosicion(cita.id, {
+        codigo: sugerencia.codigo,
+        sugerida: resultado.mejor.codigo,
+        puntaje: sugerencia.puntaje,
+        motivo,
+      });
+      const p = nueva.posicion!;
+      setCitaId(cita.id);
+      setMensaje({
+        tipo: 'ok',
+        texto:
+          p.decision === 'aceptada'
+            ? `Posición ${p.codigo} aceptada. El conductor ya ve el aviso.`
+            : `Posición ${p.codigo} asignada (motivo: ${TEXTO_MOTIVO[p.motivo ?? 'otro']}). El conductor ya ve el aviso.`,
+      });
+      setDecidida(true);
+      setEligiendo(false);
+      setElegida(null);
+    } catch (e) {
+      setMensaje({ tipo: 'error', texto: e instanceof Error ? e.message : 'No se pudo asignar.' });
+    }
+  }
+
+  function elegirPila(bloque: number, bahia: number, fila: number) {
+    if (!entrada || !resultado?.mejor) return;
+    const sugerencia = puntuarPosicion(entrada, bloque, bahia, fila);
+    if (!sugerencia) {
+      setMensaje({ tipo: 'error', texto: 'Esa pila no puede recibir este contenedor.' });
+    } else if (sugerencia.codigo === resultado.mejor.codigo) {
+      void decidir(resultado.mejor);
+    } else {
+      setMensaje(null);
+      setElegida(sugerencia);
+    }
+  }
+
+  async function importar(texto: string) {
+    try {
+      const nueva = await store.importarCita(extraerPaquete(texto), { comoConductor: false });
+      seleccionar(nueva.id);
+      setFiltro(nueva.posicion ? 'con_posicion' : 'pendientes');
+      setMensaje({ tipo: 'ok', texto: `Cita ${nueva.id} cargada desde el celular.` });
+    } catch (e) {
+      setMensaje({ tipo: 'error', texto: e instanceof Error ? e.message : 'No se pudo leer el código.' });
+    }
+  }
+
+  const bloqueMapa =
+    bloqueVisto ??
+    elegida?.coordenada.bloque ??
+    resultado?.mejor?.coordenada.bloque ??
+    (cita?.posicion && parseBaroti(cita.posicion.codigo)?.bloque) ??
+    40;
+  const contenedor = cita && demo.contenedores.find((c) => c.id === cita.contenedorId);
+
   return (
     <div className="contenido">
-      <h1>Consola del planificador</h1>
-      <div className={`tarjeta ${s.nota}`}>
-        <strong>Vista previa del motor de asignación (Fase 1).</strong>{' '}
-        <span className="texto-suave">
-          Elige una cita pendiente para ver la posición sugerida y su porqué. El mapa del patio, los botones
-          Aceptar/Modificar y los motivos se agregan en la Fase 4.
-        </span>
+      <div className={s.cabecera}>
+        <h1>Consola del planificador</h1>
+        <div className={s.kpis}>
+          {kpis.map((k) => (
+            <Link key={k.codigo} to="/indicadores" className={s.kpi} aria-label={`${k.codigo} ${k.nombre}: ${k.valor}, meta ${k.meta}, ${TEXTO_NIVEL[k.nivel]}`}>
+              <span className={s.kpiNombre}>
+                {k.codigo} · {k.nombre}
+              </span>
+              <span className={s.kpiValor}>{k.valor}</span>
+              <span className={s.kpiMeta}>Meta: {k.meta}</span>
+              <Semaforo nivel={k.nivel}>{TEXTO_NIVEL[k.nivel]}</Semaforo>
+            </Link>
+          ))}
+        </div>
       </div>
 
       <div className={s.rejilla}>
-        <section className="tarjeta" aria-labelledby="titulo-cola">
-          <h2 id="titulo-cola">Citas pendientes de posición ({pendientes.length})</h2>
-          <div className={s.desplazable}>
-            <table className="tabla">
-              <thead>
-                <tr>
-                  <th scope="col">Contenedor</th>
-                  <th scope="col">Nave</th>
-                  <th scope="col">Destino</th>
-                  <th scope="col">Peso</th>
-                  <th scope="col">Franja</th>
-                  <th scope="col"><span className="sr-only">Acción</span></th>
-                </tr>
-              </thead>
-              <tbody>
-                {pendientes.map((cita) => {
-                  const cont = demo.contenedores.find((c) => c.id === cita.contenedorId)!;
-                  const nave = demo.naves.find((n) => n.id === cont.naveId)!;
-                  const activa = cita.id === seleccionada?.id;
-                  return (
-                    <tr key={cita.id} className={`${s.fila} ${activa ? s.filaActiva : ''}`}>
-                      <td className="mono">{cont.id}</td>
-                      <td>{nave.nombre}</td>
-                      <td>{nombrePuerto(cont.puerto)}</td>
-                      <td className={s.sinCorte}>{cont.pesoT.toLocaleString('es-CL')} t</td>
-                      <td className={s.sinCorte}>
-                        {textoFranja(cita.franja)}
-                        <div className={s.leyenda}>{textoDia(cita.fecha)}</div>
-                      </td>
-                      <td>
-                        <button
-                          type="button"
-                          className={`btn ${activa ? 'btn--primario' : 'btn--secundario'}`}
-                          aria-pressed={activa}
-                          onClick={() => setCitaId(cita.id)}
-                        >
-                          Ver
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        <section className="tarjeta pila" aria-labelledby="titulo-sugerencia" aria-live="polite">
-          {!resultado?.mejor ? (
-            <p>No hay posición disponible para esta cita.</p>
-          ) : (
-            <>
-              <div className={s.cabeceraSugerencia}>
-                <div>
-                  <h2 id="titulo-sugerencia">Posición sugerida</h2>
-                  <p className={s.posicion}>{resultado.mejor.codigo}</p>
-                  <span className={s.leyenda}>bloque – bahía – fila – nivel</span>
-                </div>
-                <div className={s.puntaje}>
-                  <div className={s.puntajeNumero}>{resultado.mejor.puntaje}</div>
-                  <span className={s.leyenda}>puntaje de 100</span>
-                  <div>
-                    <Semaforo nivel={NIVEL_PRIORIDAD[resultado.prioridad]}>
-                      Prioridad {resultado.prioridad}
-                    </Semaforo>
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <h3>¿Por qué esta posición?</h3>
-                <DetalleSugerencia sugerencia={resultado.mejor} />
-              </div>
-
-              <div>
-                <h3>Alternativas</h3>
-                <ul className={s.alternativas}>
-                  {resultado.alternativas.map((a) => (
-                    <li key={a.codigo} className={s.alternativa}>
-                      <span className="mono">{a.codigo}</span>
-                      <span>{a.puntaje} pts</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              {resultado.descartados.length > 0 && (
-                <div>
-                  <h3>Bloques descartados</h3>
-                  <ul>
-                    {resultado.descartados.map((d) => (
-                      <li key={d.bloque}>{d.detalle}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              <p className={s.leyenda}>
-                Calculado para el {textoFechaHora(ahora)} con {resultado.evaluadas} pilas evaluadas. Mismas
-                condiciones, misma sugerencia.
-              </p>
-            </>
-          )}
-        </section>
+        <ColaIngresos
+          demo={demo}
+          citas={listas}
+          filtro={filtro}
+          onFiltro={(f) => {
+            setFiltro(f);
+            setCitaId(null);
+            setMensaje(null);
+            setDecidida(false);
+            setEligiendo(false);
+            setElegida(null);
+            setBloqueVisto(null);
+          }}
+          seleccionadaId={cita?.id}
+          onSeleccionar={seleccionar}
+          onQrLeido={importar}
+        />
+        {cita && resultado ? (
+          <PanelSugerencia
+            demo={demo}
+            cita={cita}
+            resultado={resultado}
+            ahora={ahora}
+            eligiendo={eligiendo}
+            elegida={elegida}
+            mensaje={mensaje}
+            decidida={decidida}
+            hayPendientes={listas.pendientes.some((c) => c.id !== cita.id)}
+            onAceptar={() => resultado.mejor && decidir(resultado.mejor)}
+            onModificar={() => {
+              setEligiendo(true);
+              setMensaje(null);
+            }}
+            onElegir={(a) => {
+              setEligiendo(true);
+              setElegida(a);
+              setBloqueVisto(a.coordenada.bloque);
+              setMensaje(null);
+            }}
+            onMotivo={(m) => elegida && decidir(elegida, m)}
+            onCancelar={() => {
+              setEligiendo(false);
+              setElegida(null);
+            }}
+            onSiguiente={() => {
+              const siguiente = listas.pendientes.find((c) => c.id !== cita.id);
+              if (siguiente) {
+                setFiltro('pendientes');
+                seleccionar(siguiente.id);
+              }
+            }}
+          />
+        ) : (
+          <section className="tarjeta">
+            <p>No hay citas en esta lista. Las nuevas reservas aparecen aquí al instante.</p>
+            {mensaje && <p className={mensaje.tipo === 'error' ? 'aviso-error' : 'aviso-ok'}>{mensaje.texto}</p>}
+          </section>
+        )}
       </div>
+
+      <MapaPatio
+        patio={demo.patio}
+        resultado={resultado}
+        actual={cita?.posicion?.codigo}
+        contenedor={contenedor}
+        bloqueVisto={bloqueMapa}
+        onVerBloque={setBloqueVisto}
+        eligiendo={eligiendo && !elegida}
+        onElegirPila={elegirPila}
+      />
     </div>
   );
 }

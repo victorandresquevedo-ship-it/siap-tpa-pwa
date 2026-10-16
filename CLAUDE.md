@@ -19,7 +19,7 @@ La especificación completa (prompt maestro) está en
 | 1 | Base, tema, rutas, datos de ejemplo, motor + pruebas | Hecha |
 | 2 | Modo B: consentimiento, reserva 2 pasos, QR guía, franja recomendada, SMS simulado, reprogramar (+ QR de ingreso, "Borrar mis datos" y selector de conductor de ejemplo, adelantados) | Hecha |
 | 3 | Modo C: modo cabina, tiempo con motivo, aviso de cambio, banner sin señal, encuesta; QR "dos dispositivos"; Panel de la demo (`/demo`) | Hecha |
-| 4 | Modo A: consola, mapa por bloques, panel "por qué", alternativas, aceptar/modificar con motivo en 1 toque; Modo D: M1–M8 | Pendiente |
+| 4 | Modo A: consola, mapa por bloques, panel "por qué", alternativas, aceptar/modificar con motivo en 1 toque; Modo D: M1–M8 | Hecha |
 | 5 | vite-plugin-pwa (precache, manifest, íconos 192/512), cola "pendiente de enviar", accesibilidad, README, Vercel | Pendiente |
 
 ## Stack
@@ -78,6 +78,16 @@ p. ej. Chrome de Windows), vite-plugin-pwa 2 (Fase 5), Vitest 5.
 - **Panel de la demo** (`src/features/demo/PanelDemo.tsx`): simula terminal (aceptar/cambiar posición,
   hitos, nave adelanta 12 h) y QR en ambos sentidos. La consola completa de la Fase 4 debe reutilizar
   `decidirPosicion` y `puntuarPosicion`.
+- **Consola** (`src/features/planificador/`): `Planificador.tsx` tiene el estado (cita elegida, filtro,
+  modo Modificar, alternativa elegida, bloque visto); `ColaIngresos`, `PanelSugerencia` y `MapaPatio`
+  son de presentación. Modificar = elegir alternativa o pila compatible del mapa (`puntuarPosicion`) →
+  motivo en un toque → `decidirPosicion`. Si se elige la pila sugerida, cuenta como aceptada.
+  "Leer QR del celular" importa con `comoConductor: false`. Tras decidir, muestra el QR para el celular.
+- **Indicadores** (`src/data/indicadores.ts`): M1 (promedio atendidos), M4 (aceptadas/decididas), M5
+  (agendados hoy / + 45 sin cita simulados), M6 (dentro de franja), M7 (agendados hoy en 12–17) se
+  calculan con la demo; M2, M3 y M8 son estimaciones marcadas "simulado". Semáforo por avance desde la
+  línea base (`LINEA_BASE`) hacia la meta: ≥1 verde, ≥0,5 amarillo, si no rojo. La consola muestra M1,
+  M4 y M6.
 - **Banner de conexión** (`components/BannerConexion.tsx`, en Layout): "Sin señal: usando datos
   guardados (al HH:MM)" con `DemoState.actualizadoEn`; "Conexión recuperada" 4 s.
 - **Momento de cálculo** en pantalla: `momentoCalculo()` redondea a 15 min para que la sugerencia no
