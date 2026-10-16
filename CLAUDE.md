@@ -1,0 +1,85 @@
+# CLAUDE.md · Contexto para retomar el proyecto
+
+## Qué es
+PWA "SIAP-TPA": prototipo de demostración (sin backend, datos simulados) para el proyecto de
+Innovación y Emprendimiento III de INACAP Arica. Problema: en el patio de Terminal Puerto Arica
+la atención de camiones tarda ~42 min (meta 15), congestión 12:00–17:00, asignación de posiciones
+a mano, ~75% de la carga es boliviana y en el antepuerto la señal es irregular.
+
+La especificación completa (prompt maestro) está en
+`C:\Users\lavez\Downloads\PWA_SIAP-TPA_Prompt_e_Instrucciones.md`.
+
+## Forma de trabajo
+- 5 fases; **detenerse al final de cada una** y decir: qué quedó, cómo probar, qué falta.
+- El usuario hace commit al aprobar cada fase ("Fase aprobada, sigue con la siguiente").
+- Toda la interfaz en **español de Chile**, y siempre visible "Prototipo de demostración, datos simulados".
+
+| Fase | Contenido | Estado |
+|---|---|---|
+| 1 | Base, tema, rutas, datos de ejemplo, motor + pruebas | Hecha |
+| 2 | Modo B: consentimiento, reserva 2 pasos, QR guía, franja recomendada, SMS simulado, reprogramar (+ QR de ingreso, "Borrar mis datos" y selector de conductor de ejemplo, adelantados) | Hecha |
+| 3 | Modo C: modo cabina, tiempo con motivo, aviso de cambio, banner sin señal, encuesta; QR "dos dispositivos" | Pendiente |
+| 4 | Modo A: consola, mapa por bloques, panel "por qué", alternativas, aceptar/modificar con motivo en 1 toque; Modo D: M1–M8 | Pendiente |
+| 5 | vite-plugin-pwa (precache, manifest, íconos 192/512), cola "pendiente de enviar", accesibilidad, README, Vercel | Pendiente |
+
+## Stack
+Vite 8 + React 19 + TypeScript 7 (tsc nativo) + React Router 7 (BrowserRouter), CSS global con
+variables + CSS Modules, idb-keyval, qrcode (generar), jsqr (leer cuando no hay BarcodeDetector,
+p. ej. Chrome de Windows), vite-plugin-pwa 2 (Fase 5), Vitest 5.
+
+## Decisiones
+- **Motor** (`src/engine/assign.ts`): función pura; `ahora` entra como parámetro (nunca `Date.now()`
+  adentro). Pesos: nave 30, puerto 20, peso 15, embarque 20, distancia 15 (suma 100). Una pila solo
+  recibe misma nave + mismo puerto. Excluye mantención y ocupación > 90%. Desempate por bloque,
+  bahía, fila. Alternativas en bloques distintos (si no hay, bahías distintas). Al recalcular
+  ignora la posición actual del mismo contenedor. `puntuarPosicion` sirve para "Modificar".
+- **Patio**: bloques 10–90 × 20 bahías × 6 filas × 5 niveles. Coordenada Baroti `40-12-03-2`.
+- **Datos** (`src/data/seed.ts`): deterministas para un mismo día (PRNG con semilla fija solo para
+  poblar el patio). Naves, navieras, conductores, patentes y teléfonos son ficticios. Siglas ISO 6346
+  con dígito de control válido. La guía de ejemplo boliviana (`EJEMPLOS.boliviano`, Andes Express →
+  Shanghái) cae en el bloque 40: es la historia de la demo (hay una prueba que lo asegura).
+- **Esquema versionado**: si cambia la forma de `DemoState`, subir `VERSION_ESQUEMA` en `seed.ts`
+  (los datos guardados se regeneran). También se regeneran si cambia el día.
+- **Capa de datos**: las pantallas solo usan `src/data/store.ts` (interfaz `DataStore` + hook
+  `useDemo`). La implementación local (`localStore.ts`) guarda en IndexedDB y avisa a otras pestañas
+  por BroadcastChannel (el último en escribir gana). Las operaciones de dominio (reservar,
+  reprogramar, decidir posición...) se agregan a la interfaz en las fases 2–4.
+- **Acciones** (`src/data/acciones.ts`): operaciones puras `(estado, ...) => { estado, resultado }`
+  (patrón `Cambio<T>`); `localStore.modificar` las aplica y guarda. Errores para el usuario con
+  `ErrorDemo` (mensaje listo para mostrar). Probadas en `acciones.test.ts`.
+- **Franjas** (`src/data/franjas.ts`): 1 h de 08:00 a 20:00, capacidad 10 por franja, demanda simulada
+  por día desde `diaBase` + citas de la demo. Espera estimada `8 + 34·r²` (42 min con la franja llena).
+  Semáforo: ≥4 libres verde, 1–3 amarillo, 0 rojo. Recomendada: menor espera evitando 12–17 h si se puede;
+  al reprogramar el mismo día prefiere franjas posteriores a la actual (el conductor se atrasó) y nunca
+  la actual. La recepción de cada nave cierra 6 h antes del embarque (`cierreRecepcion`).
+- **Historia de la demo**: Andes Express embarca pasado mañana 08:00 (cierre 02:00), así el conductor
+  boliviano reserva mañana; la recomendada de mañana es 10:00 (pruebas lo aseguran).
+- **Dispositivo** (`DemoState.dispositivo`): consentimiento, conductor de ejemplo y cita activa del
+  teléfono. "Borrar mis datos" limpia solo esto (la terminal conserva la cita). Al elegir conductor se
+  recupera su cita activa.
+- **QR** (`src/data/qr.ts`): guía `SIAPTPA:GUIA:<guia>:<contenedor>` (también acepta sigla o n° de guía a
+  mano); ingreso `SIAPTPA:INGRESO:<cita>:<contenedor>:<patente>:<fecha>:<hora>`. `LectorQr` usa
+  BarcodeDetector o jsQR (carga diferida) y ofrece "Tomar foto de la guía" porque la cámara en vivo
+  exige https. `CodigoQr` dibuja SVG local con `qrcode`.
+- **Momento de cálculo** en pantalla: `momentoCalculo()` redondea a 15 min para que la sugerencia no
+  cambie de un segundo a otro.
+- **Sin servicios externos**: tipografías del sistema (Cambria/Georgia; Inter/Calibri/Segoe UI), sin
+  Google Fonts ni analítica (Ley 21.719: todo queda en el dispositivo; sin geolocalización continua).
+- **Dos dispositivos sin servidor** (Fase 3): QR con el estado de la cita en el `#` de la URL; si el
+  planificador cambia algo después, hay que volver a escanear. Decirlo así en la app.
+
+## Diseño
+Azul marino `#21295C`, petróleo `#065A82` / `#1C7293`, acento naranja `#E8963D` (no usar como color
+de texto: no cumple AA), fondo `#F4F7FA`, tarjetas blancas con borde `#D9E3E8`. Semáforo siempre con
+ícono + texto (`components/Semaforo.tsx`). Botones del modo conductor ≥ 56 px (`.btn--grande` = 60 px).
+
+## Notas del equipo (Windows)
+- Node está en `C:\Program Files\nodejs`; en shells nuevos puede faltar en el PATH.
+- npm de este equipo bloquea scripts de instalación (no usar dependencias que los necesiten, p. ej. `sharp`).
+- El watcher de Vite a veces no detecta dos ediciones muy seguidas: si la página queda en blanco con
+  un error viejo, guardar el archivo de nuevo (o `touch`) y recargar.
+- Configuración de vista previa para Claude Code: `.claude/launch.json` (puerto 5173). Si la sesión
+  partió en otra carpeta, el panel de vista previa lee el `launch.json` de esa carpeta: en
+  `C:\Users\lavez\electricista-arica\.claude\launch.json` existe `siap-dev` (puerto 5180) para eso.
+- `optimizeDeps.include` en `vite.config.ts` evita que Vite recargue la página la primera vez que se
+  usa una dependencia (agregar ahí las nuevas dependencias de la app).

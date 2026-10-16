@@ -1,0 +1,119 @@
+.rejilla {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .rejilla {
+    grid-template-columns: 1fr;
+  }
+}
+
+.nota {
+  border-left: 4px solid var(--petroleo-claro);
+  margin-bottom: 20px;
+}
+
+.desplazable {
+  overflow-x: auto;
+}
+
+.sinCorte {
+  white-space: nowrap;
+}
+
+.fila button {
+  min-height: 40px;
+}
+
+.filaActiva td {
+  background: #eaf3f8;
+}
+
+.posicion {
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  font-size: clamp(2rem, 5vw, 2.6rem);
+  font-weight: 700;
+  color: var(--azul-marino);
+  letter-spacing: 0.04em;
+  margin: 0;
+}
+
+.leyenda {
+  font-size: 0.85rem;
+  color: var(--texto-suave);
+}
+
+.cabeceraSugerencia {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.puntaje {
+  text-align: right;
+}
+
+.puntajeNumero {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--petroleo);
+  line-height: 1;
+}
+
+.criterios {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.criterioCabecera {
+  display: flex;
+  justify-content: space-between;
+  font-weight: 600;
+}
+
+.barra {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--fondo);
+  border: 1px solid var(--borde);
+  overflow: hidden;
+  margin: 4px 0;
+}
+
+.barraRelleno {
+  height: 100%;
+  background: var(--petroleo-claro);
+}
+
+.criterioTexto {
+  font-size: 0.9rem;
+  color: var(--texto-suave);
+  margin: 0;
+}
+
+.alternativas {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.alternativa {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-chico);
+}
